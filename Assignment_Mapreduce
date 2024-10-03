@@ -1,85 +1,81 @@
-import PyPDF2
 from collections import defaultdict
 import re
 from spellchecker import SpellChecker
-
+import PyPDF2
+#DOB - 4 November 2000
 # Function to extract text from PDF
-def extract_text_from_pdf(pdf_path, start_page, num_pages, output_file):
+def extract_text_from_pdf(pdf_path, start_page, num_pages):
     with open(pdf_path, 'rb') as file:
         pdf_reader = PyPDF2.PdfReader(file)
         total_pages = len(pdf_reader.pages)
         
-        extracted_text = ""
+        extracted_text = []
         for page_num in range(start_page, min(start_page + num_pages, total_pages)):
             page = pdf_reader.pages[page_num]
-            extracted_text += page.extract_text()
+            extracted_text.append(page.extract_text())
+        
+        return extracted_text  # Return a list of extracted texts
 
-        with open(output_file, 'w', encoding='utf-8') as output:
-            output.write(extracted_text)
-
-# Extract text for file1.txt (from pages 4941 to 4951)
-pdf_path = "C:\\Users\\meera\\Desktop\\DATA 603\\HW\\Map_Reduce\\Harry_Potter_Half_Blood_Prince.pdf"  # PDF file path
-start_page_file1 = 4941 - 1  # 1-indexed to 0-indexed
-num_pages_file1 = 10
-output_file1 = "file1.txt"
-extract_text_from_pdf(pdf_path, start_page_file1, num_pages_file1, output_file1)
-
-# Function to count word occurrences in a text file
-def count_word_occurrences(file_name):
+# Map phase: Count word occurrences for each segment of text
+def map_word_count(text_segments):
     word_count = defaultdict(int)
-
-    with open(file_name, 'r', encoding='utf-8') as file:
-        for line in file:
-            words = re.findall(r'\b\w+\b', line.lower())
-            for word in words:
-                word_count[word] += 1
-
+    
+    for text in text_segments:
+        words = re.findall(r'\b\w+\b', text.lower())
+        for word in words:
+            word_count[word] += 1
+            
     return word_count
 
-# Count occurrences in file1.txt
-word_count_file1 = count_word_occurrences(output_file1)
+# Reduce phase: Combine counts from different segments
+def reduce_word_count(word_counts):
+    final_count = defaultdict(int)
+    for count in word_counts:
+        for word, cnt in count.items():
+            final_count[word] += cnt
+    return final_count
 
-# Print the word count for file1
+# PDF file path
+pdf_path = "C:\\Users\\meera\\Desktop\\DATA 603\\HW\\Map_Reduce\\Harry_Potter_Half_Blood_Prince.pdf"
+
+# Extract text for file1
+text_segments_file1 = extract_text_from_pdf(pdf_path, 4941 - 1, 10)
+text_segments_file2 = extract_text_from_pdf(pdf_path, 100 - 1, 10)
+
+# Map phase
+word_counts_file1 = map_word_count(text_segments_file1)
+word_counts_file2 = map_word_count(text_segments_file2)
+
+# Reduce phase
+final_word_count_file1 = reduce_word_count([word_counts_file1])
+final_word_count_file2 = reduce_word_count([word_counts_file2])
+
+# Output results
 print("Word count for file1:")
-for word, count in word_count_file1.items():
+for word, count in final_word_count_file1.items():
     print(f"{word}: {count}")
 
-# Write word counts to file2.txt for non-English word analysis
-output_file2 = "file2.txt"
-with open(output_file2, 'w', encoding='utf-8') as file2:
-    for word, count in word_count_file1.items():
-        file2.write(f"{word}: {count}\n")
+print("\nWord count for file2:")
+for word, count in final_word_count_file2.items():
+    print(f"{word}: {count}")
 
-# Extract text for file2.txt (from pages 100 to 110)
-start_page_file2 = 100 - 1  # 1-indexed to 0-indexed
-num_pages_file2 = 10
-output_file2_text = "file2.txt"
-extract_text_from_pdf(pdf_path, start_page_file2, num_pages_file2, output_file2_text)
-
-# Function to count non-English words in a text file
-def count_non_english_words(file_name):
+# Count non-English words for file2
+def count_non_english_words(text_segments):
     spell = SpellChecker()
     non_english_count = defaultdict(int)
 
-    try:
-        with open(file_name, 'r', encoding='utf-8') as file:
-            for line in file:
-                words = re.findall(r'\b\w+\b', line.lower())
-                for word in words:
-                    if word not in spell:  # If the word is not found in the dictionary
-                        non_english_count[word] += 1
-
-    except FileNotFoundError:
-        print(f"Error: The file {file_name} was not found.")
-        return non_english_count  # Return empty count
+    for text in text_segments:
+        words = re.findall(r'\b\w+\b', text.lower())
+        for word in words:
+            if word not in spell:  # If the word is not found in the dictionary
+                non_english_count[word] += 1
 
     return non_english_count
 
-# Count non-English words in file2.txt
-non_english_count_file2 = count_non_english_words(output_file2)
+# Count non-English words in file2 text segments
+non_english_count_file2 = count_non_english_words(text_segments_file2)
 
-# Print the non-English word count for file2
-print("Non-English word count for file2:")
+# Print non-English word count for file2
+print("\nNon-English word count for file2:")
 for word, count in non_english_count_file2.items():
     print(f"{word}: {count}")
-
